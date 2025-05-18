@@ -9,6 +9,11 @@ globals [esta-chovendo? duracao-chuva]
 ;variavel para os patches
 patches-own [umidade]
 
+plants-own [
+  estado-saude       ; saudável, desidratada, murcha, morta
+;  tempo-sem-agua     ; contador de ticks sem água suficiente
+]
+
 to setup
   clear-all
   reset-ticks
@@ -32,9 +37,9 @@ end
 
 to go
   ; sorteia início de chuva com pequena chance, se ainda não estiver chovendo
-  if not esta-chovendo? and (random-float 1.0 < 0.03) [
+  if not esta-chovendo? and (random-float 1.0 < 0.04) [
     set esta-chovendo? true
-    set duracao-chuva 10; ou random 20 + 20 se quiser duração variável
+    set duracao-chuva random 5 + 5; ou random 20 + 20 se quiser duração variável
     ask chuvas [ set hidden? false ]
     show "🌧️ Começou a chover!"
   ]
@@ -51,6 +56,7 @@ to go
       show "☀️ A chuva parou."
     ]
   ]
+
   ; se não está chovendo, evapora normalmente
   if not esta-chovendo? [
     evaporar-umidade
@@ -58,17 +64,64 @@ to go
 
   ; monitoramento da umidade do solo pelo sensor
   ask sensors [
-    let plantas-monitoradas plants in-radius 1.5
-    foreach sort plantas-monitoradas [
-      planta ->
-        let patch-abaixo patch-at ( [xcor] of planta ) ( [ycor] of planta )
-        let umidade-do-solo [umidade] of patch-abaixo
-        show (word "Planta em (" [xcor] of planta "," [ycor] of planta ") - Umidade do solo: " umidade-do-solo "%")
-    ]
+    monitorar-plantas
+  ]
+
+  ask irrigators [
+    verificar-irrigacao
   ]
 
   atualizar-estado-das-plantas
   tick
+end
+
+to monitorar-plantas
+  let plantas-monitoradas plants in-radius 1.5
+  foreach sort plantas-monitoradas [
+    planta ->
+    let patch-abaixo patch-at ( [xcor] of planta ) ( [ycor] of planta )
+    let umidade-do-solo [umidade] of patch-abaixo
+    show (word "Planta em (" [xcor] of planta "," [ycor] of planta ") - Umidade do solo: " umidade-do-solo "%")
+
+;    exibindo alerta em caso de mudança do estado da planta
+    if [estado-saude] of planta = "desidratada" [
+      show (word "ALERTA: Planta em (" [xcor] of planta "," [ycor] of planta ") precisa de água!")
+    ]
+    if [estado-saude] of planta = "murcha" [
+      show (word "ALERTA CRÍTICO: Planta em (" [xcor] of planta "," [ycor] of planta ") está murchando!")
+    ]
+  ]
+end
+
+to verificar-irrigacao
+  let plantas-proximas plants in-radius 1.5 ; alcance do irrigador é o mesmo do sensor
+  let precisa-irrigar false
+
+  foreach sort plantas-proximas [
+    planta ->
+    if ([estado-saude] of planta = "desidratada" or [estado-saude] of planta = "murcha") [
+      set precisa-irrigar true
+    ]
+  ]
+
+;  de acordo com o estado das plantas que foram observadas pelo sensor, o irrigador vai ser ativado
+  if precisa-irrigar [
+    irrigar
+  ]
+end
+
+to irrigar
+  show " Ativando o irrigador!"
+  set color red ; a cor vai mudar para indicar que esta ativo e irrigando
+
+  ask patches in-radius 2.2 [
+    set umidade umidade + 15 ; aumentando a umidade por causa da agua que ta sendo irrigada
+    if umidade > 100 [ set umidade 100 ]
+    set pcolor (-0.06 * umidade) + 38
+  ]
+
+  wait 2 ;pequena pausa para visualizar o irrigador ativo
+  set color cyan ;voltando a cor padrao do irrigador
 end
 
 ;iniciando as plantas
@@ -77,14 +130,17 @@ to setup-plants
   let y 0
   let plant-x-start -2
 
-  ; cria as 2 plantas que vao receber o monitoramento do sensor e a irrigaçaoã
+  ; cria as 2 plantas que vao receber o monitoramento do sensor e a irrigacao
+;  e uma mais distante que nao vai receber a irrigacao nem o monitoramento do sensor
   repeat 3 [
     create-plants 1 [
       setxy plant-x-start y
       set shape "plant"
       set size 1.4
       set color green
-      set label "saudável"
+      set label "saudavel"
+      set estado-saude "saudavel"
+;      set tempo-sem-agua 0
     ]
     set plant-x-start plant-x-start + 2
   ]
@@ -100,9 +156,9 @@ to setup-irrigador-sensor
     set label "sensor"
   ]
 
-  ; cria 1 irrigador (por agora apenas visual)
+  ; cria 1 irrigador proximo do sensor
   create-irrigators 1 [
-    setxy -1 2.4
+    setxy -1 1
     set shape "bulldozer top"
     set size 1.3
     set color cyan
@@ -124,22 +180,45 @@ to atualizar-estado-das-plantas
   ask plants [
     let umidade-do-solo [umidade] of patch-here
 
-    if umidade-do-solo >= 60 [
+    ; atualizando o contador de tempo sem agua para monitoramento futuro
+;    ifelse umidade-do-solo < 60 [
+;      set tempo-sem-agua tempo-sem-agua + 1
+;    ] [
+;      set tempo-sem-agua 0
+;    ]
+
+    ifelse umidade-do-solo >= 60 [
+      set estado-saude "saudável"
       set color green
-      set label "saudável"
+      set label "saudavel"
+      set estado-saude "saudavel"
+    ] [
+      if umidade-do-solo < 60 and umidade-do-solo >= 40 [
+        set estado-saude "desidratada"
+        set color yellow
+        set label "desidratada"
+        set estado-saude "desidratada"
+      ]
+      if umidade-do-solo < 40 and umidade-do-solo >= 20 [
+        set estado-saude "murcha"
+        set color orange
+        set label "murcha"
+        set estado-saude "murcha"
+      ]
+      if umidade-do-solo < 10 [
+        set estado-saude "morta"
+        set color 21  ; marrom bem escuro
+        set label "morta"
+        set estado-saude "morta"
+      ]
     ]
-    if umidade-do-solo < 60 and umidade-do-solo >= 40 [
-      set color yellow
-      set label "desidratada"
-    ]
-    if umidade-do-solo < 40 and umidade-do-solo >= 20 [
-      set color orange
-      set label "murcha"
-    ]
-    if umidade-do-solo < 10 [
-      set color 21  ; marrom bem escuro
-      set label "morta"
-    ]
+
+    ; agora se ficou muito tempo sem água, o estado de saude vai piorar
+;    if tempo-sem-agua > 20 and estado-saude != "morta" [
+;      set estado-saude "murcha"
+;      set color orange
+;      set label "murcha"
+;    ]
   ]
 end
 
@@ -159,7 +238,7 @@ to evento-chuva
     chover
     set hidden? false
     ask patch-here [
-;      a chuva aqui pode ocasionar em inundacoes das plantas, o que o sensor tambem vai capturar e informarõ
+;      a chuva aqui pode ocasionar em inundacoes das plantas, o que o sensor tambem vai capturar e informar
       set umidade umidade + random-float 3
       set pcolor (-0.06 * umidade) + 38
     ]
@@ -176,10 +255,10 @@ to chover
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-587
-122
-894
-430
+751
+84
+1058
+392
 -1
 -1
 33.33
@@ -203,10 +282,10 @@ ticks
 30.0
 
 BUTTON
-385
-139
-452
-172
+549
+101
+616
+134
 NIL
 setup
 NIL
@@ -220,10 +299,10 @@ NIL
 1
 
 BUTTON
-418
-198
-481
-231
+645
+101
+708
+134
 NIL
 go
 T
