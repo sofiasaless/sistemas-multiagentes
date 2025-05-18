@@ -4,6 +4,8 @@ breed [sensors sensor]
 breed [irrigators irrigator]
 breed [chuvas chuva]
 
+globals [esta-chovendo? duracao-chuva]
+
 ;variavel para os patches
 patches-own [umidade]
 
@@ -11,9 +13,13 @@ to setup
   clear-all
   reset-ticks
 
+  set esta-chovendo? false
+  set duracao-chuva 30
+
   setup-patches
   setup-plants
   setup-irrigador-sensor
+  setup-chuva
 end
 
 ; deixa o solo com aparência de solo agrícola (variação de umidade com cores)
@@ -25,8 +31,32 @@ to setup-patches
 end
 
 to go
-  evaporar-umidade
+  ; sorteia início de chuva com pequena chance, se ainda não estiver chovendo
+  if not esta-chovendo? and (random-float 1.0 < 0.03) [
+    set esta-chovendo? true
+    set duracao-chuva 10; ou random 20 + 20 se quiser duração variável
+    ask chuvas [ set hidden? false ]
+    show "🌧️ Começou a chover!"
+  ]
 
+  ; se estiver chovendo, executa evento de chuva
+  if esta-chovendo? [
+    evento-chuva
+    set duracao-chuva duracao-chuva - 1
+
+    ; se a duração acabou, para a chuva
+    if duracao-chuva <= 0 [
+      set esta-chovendo? false
+      ask chuvas [ set hidden? true ]
+      show "☀️ A chuva parou."
+    ]
+  ]
+  ; se não está chovendo, evapora normalmente
+  if not esta-chovendo? [
+    evaporar-umidade
+  ]
+
+  ; monitoramento da umidade do solo pelo sensor
   ask sensors [
     let plantas-monitoradas plants in-radius 1.5
     foreach sort plantas-monitoradas [
@@ -37,7 +67,7 @@ to go
     ]
   ]
 
-  atualizar-estado-das-plantas ; plantas reagem à umidade
+  atualizar-estado-das-plantas
   tick
 end
 
@@ -51,8 +81,8 @@ to setup-plants
   repeat 3 [
     create-plants 1 [
       setxy plant-x-start y
-      set shape "plant small"
-      set size 1.9
+      set shape "plant"
+      set size 1.4
       set color green
       set label "saudável"
     ]
@@ -84,7 +114,7 @@ end
 to evaporar-umidade
   ask patches [
     ; simula evaporação ou absorção da planta
-    set umidade umidade - random 6
+    set umidade umidade - random-float 1
     if umidade < 0 [ set umidade 0 ]      ; mantém valor mínimo em 0
     set pcolor (-0.06 * umidade) + 38
   ]
@@ -112,23 +142,55 @@ to atualizar-estado-das-plantas
     ]
   ]
 end
+
+to setup-chuva
+  create-chuvas 80 [
+    setxy random-xcor random-ycor
+    set shape "line half"
+    set color 95
+    set size 1
+    set hidden? true
+  ]
+end
+
+to evento-chuva
+  ask chuvas [
+    forward 1.5
+    chover
+    set hidden? false
+    ask patch-here [
+;      a chuva aqui pode ocasionar em inundacoes das plantas, o que o sensor tambem vai capturar e informarõ
+      set umidade umidade + random-float 3
+      set pcolor (-0.06 * umidade) + 38
+    ]
+  ]
+end
+
+to chover
+  ; angulo que as gotas de chuva vao ser lancadas
+  let angulo-atual 135
+  ; definindo um breve desvio pra criar a sensacao de chuva
+  let desvio random-float 30 - 15  ; entre -15 e +15 graus
+  ; Define a nova direção
+  set heading angulo-atual + desvio
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
-632
-29
-955
-353
+587
+122
+894
+430
 -1
 -1
-35.0
+33.33
 1
 10
 1
 1
 1
 0
-0
-0
+1
+1
 1
 -4
 4
@@ -141,10 +203,10 @@ ticks
 30.0
 
 BUTTON
-417
-101
-484
-134
+385
+139
+452
+172
 NIL
 setup
 NIL
@@ -158,10 +220,10 @@ NIL
 1
 
 BUTTON
-445
-150
-508
-183
+418
+198
+481
+231
 NIL
 go
 T
