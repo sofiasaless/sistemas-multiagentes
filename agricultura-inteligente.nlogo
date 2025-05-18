@@ -23,8 +23,7 @@ to setup
 
   setup-patches
   setup-plants
-  setup-irrigador-sensor
-  setup-chuva
+  setup-agentes
 end
 
 ; deixa o solo com aparência de solo agrícola (variação de umidade com cores)
@@ -32,6 +31,58 @@ to setup-patches
   ask patches [
     set umidade 90
     set pcolor (-0.06 * umidade) + 38
+  ]
+end
+
+to setup-agentes
+  ; cria 1 sensor que monitora as 2 primeiras plantas
+  create-sensors 1 [
+    setxy -1 0.3
+    set shape "ufo top"
+    set size 1
+    set color blue
+    set label "sensor"
+  ]
+
+  ; cria 1 irrigador proximo do sensor
+  create-irrigators 1 [
+    setxy -1 1
+    set shape "bulldozer top"
+    set size 1.3
+    set color cyan
+    set label "irrigador"
+    set heading 180
+  ]
+
+;  criando o agente de chuva
+  create-chuvas 80 [
+    setxy random-xcor random-ycor
+    set shape "line half"
+    set color 95
+    set size 1
+    set hidden? true
+  ]
+end
+
+;iniciando as plantas
+to setup-plants
+  ; coordenadas das plantas
+  let y 0
+  let plant-x-start -2
+
+  ; cria as 2 plantas que vao receber o monitoramento do sensor e a irrigacao
+;  e uma mais distante que nao vai receber a irrigacao nem o monitoramento do sensor
+  repeat 3 [
+    create-plants 1 [
+      setxy plant-x-start y
+      set shape "plant"
+      set size 1.4
+      set color green
+      set label "saudavel"
+      set estado-saude "saudavel"
+;      set tempo-sem-agua 0
+    ]
+    set plant-x-start plant-x-start + 2
   ]
 end
 
@@ -124,49 +175,6 @@ to irrigar
   set color cyan ;voltando a cor padrao do irrigador
 end
 
-;iniciando as plantas
-to setup-plants
-  ; coordenadas das plantas
-  let y 0
-  let plant-x-start -2
-
-  ; cria as 2 plantas que vao receber o monitoramento do sensor e a irrigacao
-;  e uma mais distante que nao vai receber a irrigacao nem o monitoramento do sensor
-  repeat 3 [
-    create-plants 1 [
-      setxy plant-x-start y
-      set shape "plant"
-      set size 1.4
-      set color green
-      set label "saudavel"
-      set estado-saude "saudavel"
-;      set tempo-sem-agua 0
-    ]
-    set plant-x-start plant-x-start + 2
-  ]
-end
-
-to setup-irrigador-sensor
-  ; cria 1 sensor que monitora as 2 primeiras plantas
-  create-sensors 1 [
-    setxy -1 0.3
-    set shape "ufo top"
-    set size 1
-    set color blue
-    set label "sensor"
-  ]
-
-  ; cria 1 irrigador proximo do sensor
-  create-irrigators 1 [
-    setxy -1 1
-    set shape "bulldozer top"
-    set size 1.3
-    set color cyan
-    set label "irrigador"
-    set heading 180
-  ]
-end
-
 to evaporar-umidade
   ask patches [
     ; simula evaporação ou absorção da planta
@@ -219,16 +227,6 @@ to atualizar-estado-das-plantas
 ;      set color orange
 ;      set label "murcha"
 ;    ]
-  ]
-end
-
-to setup-chuva
-  create-chuvas 80 [
-    setxy random-xcor random-ycor
-    set shape "line half"
-    set color 95
-    set size 1
-    set hidden? true
   ]
 end
 
