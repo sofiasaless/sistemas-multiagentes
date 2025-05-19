@@ -4,6 +4,7 @@ breed [sensors sensor]
 breed [irrigators irrigator]
 breed [chuvas chuva]
 
+; varivaies globais
 globals [
   esta-chovendo?
   duracao-chuva
@@ -12,14 +13,16 @@ globals [
   umidade-planta3
 ]
 
-;variavel para os patches
+; variavel para os patches
 patches-own [umidade]
 
+; variaveis para os agentes planta
 plants-own [
   estado-saude       ; saudável, desidratada, murcha, morta
 ;  tempo-sem-agua     ; contador de ticks sem água suficiente
 ]
 
+; setando configuraçao inicial do ambiente
 to setup
   clear-all
   reset-ticks
@@ -32,14 +35,16 @@ to setup
   setup-agentes
 end
 
-; deixa o solo com aparência de solo agrícola (variação de umidade com cores)
+; configuraçao inicial dos patches (solo em que as plantas vao ficar)
 to setup-patches
   ask patches [
+    ; deixa o solo com aparência de solo agrícola (variação de umidade com cores)
     set umidade 90
     set pcolor (-0.06 * umidade) + 38
   ]
 end
 
+; configuraçao inicial dos agentes (sensores, irrigadores e chuva)
 to setup-agentes
   ; cria 1 sensor que monitora as 2 primeiras plantas
   create-sensors 1 [
@@ -50,7 +55,7 @@ to setup-agentes
     set label "sensor"
   ]
 
-  ; cria 1 irrigador proximo do sensor
+  ; cria 1 irrigador proximo ao sensor
   create-irrigators 1 [
     setxy -1 1
     set shape "bulldozer top"
@@ -70,14 +75,16 @@ to setup-agentes
   ]
 end
 
-;iniciando as plantas
+; configuraçao inicial das plantas
+; o setup das plantas fica separado porque a localizaçao delas ainda nao esta automatica
+; as duas primeiras plantas sao monitoradas pelo sensor, a planta mais distante na direita nao recebe monitoramento do sensor
 to setup-plants
-  ; coordenadas das plantas
+  ; condernadas inicial das plantas
   let y 0
   let plant-x-start -2
 
   ; cria as 2 plantas que vao receber o monitoramento do sensor e a irrigacao
-;  e uma mais distante que nao vai receber a irrigacao nem o monitoramento do sensor
+  ; e uma planta mais distante que nao vai receber a irrigacao nem o monitoramento do sensor
   repeat 3 [
     create-plants 1 [
       setxy plant-x-start y
@@ -92,6 +99,7 @@ to setup-plants
   ]
 end
 
+; responsavel por iniciar o funcionamento geral do ambiente
 to go
   ; sorteia início de chuva com pequena chance, se ainda não estiver chovendo
   if not esta-chovendo? and (random-float 1.0 < 0.03) [
@@ -114,7 +122,7 @@ to go
     ]
   ]
 
-  ; se não está chovendo, evapora normalmente
+  ; se não está chovendo, o procedimento de evaporar a umidade do solo acontece normalmente
   if not esta-chovendo? [
     evaporar-umidade
   ]
@@ -124,6 +132,8 @@ to go
     monitorar-plantas
   ]
 
+  ; logo em seguida o procedimento de irrigacao aciona
+  ; (posteriormente a chamada desse procedimento deve ser feita dentro do procedimento de 'monitorar-plantas', ja que o sensor vai ser o agente responsavel pelas atividades)
   ask irrigators [
     verificar-irrigacao
   ]
@@ -134,6 +144,7 @@ to go
   tick
 end
 
+; procedimento que os agentes sensor vao realizar
 to monitorar-plantas
   let plantas-monitoradas plants in-radius 1.5
   foreach sort plantas-monitoradas [
@@ -145,6 +156,7 @@ to monitorar-plantas
 ;    exibindo alerta em caso de mudança do estado da planta
     if [estado-saude] of planta = "desidratada" [
       show (word "ALERTA: Planta em (" [xcor] of planta "," [ycor] of planta ") precisa de água!")
+      ; a chamada do procedimento de irrigacao deve acontecer aqui posteriormente....
     ]
     if [estado-saude] of planta = "murcha" [
       show (word "ALERTA CRÍTICO: Planta em (" [xcor] of planta "," [ycor] of planta ") está murchando!")
@@ -152,6 +164,7 @@ to monitorar-plantas
   ]
 end
 
+; procedimento do agente do irrigador
 to verificar-irrigacao
   let plantas-proximas plants in-radius 1.5 ; alcance do irrigador é o mesmo do sensor
   let precisa-irrigar false
@@ -169,6 +182,7 @@ to verificar-irrigacao
   ]
 end
 
+; procedimento de irrigar o solo
 to irrigar
   show " Ativando o irrigador!"
   set color red ; a cor vai mudar para indicar que esta ativo e irrigando
@@ -188,6 +202,7 @@ to irrigar
   set color cyan ;voltando a cor padrao do irrigador
 end
 
+; procedimento responsavel por evaporar a umidade do solo
 to evaporar-umidade
   ask patches [
     ; simula evaporação ou absorção da planta
@@ -197,6 +212,7 @@ to evaporar-umidade
   ]
 end
 
+; procedimento de atualizaçao do estado das plantas de acordo com a umidade do solo em que estao plantadas
 to atualizar-estado-das-plantas
   ask plants [
     let umidade-do-solo [umidade] of patch-here
@@ -209,25 +225,21 @@ to atualizar-estado-das-plantas
 ;    ]
 
     ifelse umidade-do-solo >= 60 [
-      set estado-saude "saudável"
       set color green
       set label "saudavel"
       set estado-saude "saudavel"
     ] [
       if umidade-do-solo < 60 and umidade-do-solo >= 40 [
-        set estado-saude "desidratada"
         set color yellow
         set label "desidratada"
         set estado-saude "desidratada"
       ]
       if umidade-do-solo < 40 and umidade-do-solo >= 20 [
-        set estado-saude "murcha"
         set color orange
         set label "murcha"
         set estado-saude "murcha"
       ]
       if umidade-do-solo < 10 [
-        set estado-saude "morta"
         set color 21  ; marrom bem escuro
         set label "morta"
         set estado-saude "morta"
@@ -243,7 +255,9 @@ to atualizar-estado-das-plantas
   ]
 end
 
+; procedimento responsavel por acionar a chuva
 to evento-chuva
+  ; chamando o agente da chuva
   ask chuvas [
     forward 1.5
     chover
@@ -262,6 +276,7 @@ to evento-chuva
   atualizar-estado-das-plantas
 end
 
+; procedimento visual da chuva
 to chover
   ; angulo que as gotas de chuva vao ser lancadas
   let angulo-atual 135
@@ -271,6 +286,7 @@ to chover
   set heading angulo-atual + desvio
 end
 
+; procedimento responsavel por atualizar as variaveis que ficam no grafico de monitoramento da umidade do solo
 to monitorar-umidade-plantas
   let patch1 patch -2 0
   set umidade-planta1 [umidade] of patch1
@@ -285,8 +301,8 @@ end
 GRAPHICS-WINDOW
 610
 78
-1047
-516
+1090
+559
 -1
 -1
 52.44444444444444
@@ -344,24 +360,24 @@ NIL
 1
 
 PLOT
-160
+85
 185
 569
 435
 Monitoramento da umidade do solo das plantas
-NIL
-NIL
+Tempo
+Umidade do solo
 0.0
 10.0
 0.0
-10.0
+100.0
 true
 false
 "" ""
 PENS
 "Planta 1" 1.0 0 -16777216 true "" "plot umidade-planta1"
 "Planta 2" 1.0 0 -7500403 true "" "plot umidade-planta2"
-"Planta 3 (nao monitorada)" 1.0 0 -2674135 true "" "plot umidade-planta3"
+"pen-2" 1.0 0 -2674135 true "" "plot umidade-planta3"
 
 BUTTON
 271
