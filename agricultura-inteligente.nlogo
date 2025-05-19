@@ -4,7 +4,13 @@ breed [sensors sensor]
 breed [irrigators irrigator]
 breed [chuvas chuva]
 
-globals [esta-chovendo? duracao-chuva]
+globals [
+  esta-chovendo?
+  duracao-chuva
+  umidade-planta1
+  umidade-planta2
+  umidade-planta3
+]
 
 ;variavel para os patches
 patches-own [umidade]
@@ -88,9 +94,9 @@ end
 
 to go
   ; sorteia início de chuva com pequena chance, se ainda não estiver chovendo
-  if not esta-chovendo? and (random-float 1.0 < 0.04) [
+  if not esta-chovendo? and (random-float 1.0 < 0.03) [
     set esta-chovendo? true
-    set duracao-chuva random 5 + 5; ou random 20 + 20 se quiser duração variável
+    set duracao-chuva random 5 + 1; ou random 20 + 20 se quiser duração variável
     ask chuvas [ set hidden? false ]
     show "🌧️ Começou a chover!"
   ]
@@ -123,6 +129,8 @@ to go
   ]
 
   atualizar-estado-das-plantas
+
+  monitorar-umidade-plantas
   tick
 end
 
@@ -132,7 +140,7 @@ to monitorar-plantas
     planta ->
     let patch-abaixo patch-at ( [xcor] of planta ) ( [ycor] of planta )
     let umidade-do-solo [umidade] of patch-abaixo
-    show (word "Planta em (" [xcor] of planta "," [ycor] of planta ") - Umidade do solo: " umidade-do-solo "%")
+;    show (word "Planta em (" [xcor] of planta "," [ycor] of planta ") - Umidade do solo: " umidade-do-solo "%")
 
 ;    exibindo alerta em caso de mudança do estado da planta
     if [estado-saude] of planta = "desidratada" [
@@ -167,8 +175,13 @@ to irrigar
 
   ask patches in-radius 2.2 [
     set umidade umidade + 15 ; aumentando a umidade por causa da agua que ta sendo irrigada
-    if umidade > 100 [ set umidade 100 ]
-    set pcolor (-0.06 * umidade) + 38
+    ifelse umidade > 100 [
+      set umidade 100
+      set pcolor 32
+    ]
+    [
+      set pcolor (-0.06 * umidade) + 38
+    ]
   ]
 
   wait 2 ;pequena pausa para visualizar o irrigador ativo
@@ -237,10 +250,16 @@ to evento-chuva
     set hidden? false
     ask patch-here [
 ;      a chuva aqui pode ocasionar em inundacoes das plantas, o que o sensor tambem vai capturar e informar
-      set umidade umidade + random-float 3
-      set pcolor (-0.06 * umidade) + 38
+      set umidade umidade + random-float 5
+      ifelse umidade > 100 [
+        set umidade 100
+        set pcolor 32
+      ][ set pcolor (-0.06 * umidade) + 38 ]
+
     ]
   ]
+
+  atualizar-estado-das-plantas
 end
 
 to chover
@@ -251,15 +270,26 @@ to chover
   ; Define a nova direção
   set heading angulo-atual + desvio
 end
+
+to monitorar-umidade-plantas
+  let patch1 patch -2 0
+  set umidade-planta1 [umidade] of patch1
+
+  let patch2 patch 0 0
+  set umidade-planta2 [umidade] of patch2
+
+  let patch3 patch 2 0
+  set umidade-planta3 [umidade] of patch3
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
-751
-84
-1058
-392
+610
+78
+1047
+516
 -1
 -1
-33.33
+52.44444444444444
 1
 10
 1
@@ -280,10 +310,10 @@ ticks
 30.0
 
 BUTTON
-549
-101
-616
-134
+397
+116
+464
+149
 NIL
 setup
 NIL
@@ -297,12 +327,49 @@ NIL
 1
 
 BUTTON
-645
-101
-708
-134
+493
+116
+556
+149
 NIL
 go
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+PLOT
+160
+185
+569
+435
+Monitoramento da umidade do solo das plantas
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"Planta 1" 1.0 0 -16777216 true "" "plot umidade-planta1"
+"Planta 2" 1.0 0 -7500403 true "" "plot umidade-planta2"
+"Planta 3 (nao monitorada)" 1.0 0 -2674135 true "" "plot umidade-planta3"
+
+BUTTON
+271
+115
+347
+149
+chover
+evento-chuva
 T
 1
 T
