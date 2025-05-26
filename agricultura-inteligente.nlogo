@@ -3,6 +3,7 @@ breed [plants plant]
 breed [sensors sensor]
 breed [irrigators irrigator]
 breed [chuvas chuva]
+breed [fazendeiros fazendeiro]
 
 ; varivaies globais
 globals [
@@ -11,6 +12,12 @@ globals [
   umidade-planta1
   umidade-planta2
   umidade-planta3
+
+; variaveis para controle do agente fazendeiro
+  fazendeiro-ativo?
+  velocidade-normal
+  velocidade-lenta
+  frame-rate
 ]
 
 ; variavel para os patches
@@ -22,6 +29,11 @@ plants-own [
 ;  tempo-sem-agua     ; contador de ticks sem água suficiente
 ]
 
+; variaveis para o agente do fazendeiro
+fazendeiros-own [
+  tempo-para-proxima-visita
+]
+
 ; setando configuraçao inicial do ambiente
 to setup
   clear-all
@@ -29,6 +41,12 @@ to setup
 
   set esta-chovendo? false
   set duracao-chuva 30
+
+; as velocidades tem objetivo de deixar a visualização do fazendeiro agindo mais clara 
+  set velocidade-normal 0.05 
+  set velocidade-lenta 0.3    
+  set fazendeiro-ativo? false
+  set frame-rate velocidade-normal
 
   setup-patches
   setup-plants
@@ -72,6 +90,17 @@ to setup-agentes
     set color 95
     set size 1
     set hidden? true
+  ]
+
+;  criando o agente que vai simular o agricultor local
+  create-fazendeiros 1 [
+    set color 137
+    set shape "person farmer"
+    set size 1.3
+    set label "agricultor"
+    setxy 10 10
+    set hidden? true
+    set tempo-para-proxima-visita random 20 + 10
   ]
 end
 
@@ -141,6 +170,15 @@ to go
   atualizar-estado-das-plantas
 
   monitorar-umidade-plantas
+
+  ifelse fazendeiro-ativo? [
+    tick-advance velocidade-lenta
+  ] [
+    tick-advance velocidade-normal
+  ]
+
+  monitoramento-humano
+
   tick
 end
 
@@ -297,12 +335,99 @@ to monitorar-umidade-plantas
   let patch3 patch 2 0
   set umidade-planta3 [umidade] of patch3
 end
+
+; procedimento de monitoramento que o fazendeiro ira fazer
+to monitoramento-humano
+  ask fazendeiros [
+    if tempo-para-proxima-visita <= 0 and not fazendeiro-ativo? [
+      set fazendeiro-ativo? true
+      set frame-rate velocidade-lenta  ; Diminui a velocidade
+
+      let planta-alvo one-of plants with [xcor = 2 and ycor = 0]
+      ifelse planta-alvo != nobody [
+        set hidden? false
+        show "Fazendeiro está a caminho da planta não monitorada!"
+
+        ; Animação de caminhada até a planta
+        let destino-x [xcor] of planta-alvo
+        let destino-y [ycor] of planta-alvo + 1  ; o agente do fazendeiro vai parar proximo a planta que nao ta sendo monitorada
+
+        ; Caminhada com passo a passo visível
+        while [distancexy destino-x destino-y > 0.5] [
+          facexy destino-x destino-y
+          forward 0.3
+          wait 0.1  ; pausa entre os passos para possibilitar a visualização
+        ]
+
+        show "Fazendeiro está avaliando a planta..."
+        wait 1
+
+        ; curta animação para dizer que o fazendeiro está avaliando a planta
+        repeat 3 [
+          set color red
+          wait 0.2
+          set color 137
+          wait 0.2
+        ]
+
+        ; a decisão que o fazendeiro tomar poderá ter erros
+        let avaliacao [estado-saude] of planta-alvo
+        if random-float 1.0 < 0.2 [
+          set avaliacao item random 3 ["saudavel" "desidratada" "murcha"]
+          show "Fazendeiro está em dúvida..."
+          wait 0.5
+        ]
+
+        ifelse avaliacao != "saudavel" [
+          show (word "Fazendeiro decidiu regar (avaliou como: " avaliacao ")")
+
+          ; regando
+          set color red
+          ask patches in-radius 1.5 [
+            set umidade umidade + 15
+            ifelse umidade > 100 [
+              set umidade 100
+              set pcolor 32
+            ]
+            [
+              set pcolor (-0.06 * umidade) + 38
+            ]
+          ]
+
+          ; efeito visual da água
+          repeat 5 [
+            ask patches in-radius 2 [
+              set pcolor 108
+            ]
+            wait 0.1
+          ]
+          wait 0.5
+          set color 35
+        ] [
+          show "Fazendeiro avaliou que não precisa regar"
+        ]
+
+        show "Fazendeiro está indo embora..."
+        setxy 10 10
+        wait 0.5
+      ] [
+        set tempo-para-proxima-visita 5
+      ]
+
+      set hidden? true
+      set fazendeiro-ativo? false
+      set frame-rate velocidade-normal  ; Restaura velocidade normal
+      set tempo-para-proxima-visita random 30 + 20
+    ]
+    set tempo-para-proxima-visita tempo-para-proxima-visita - 1
+  ]
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
-610
-78
-1090
-559
+920
+93
+1400
+574
 -1
 -1
 52.44444444444444
@@ -326,10 +451,10 @@ ticks
 30.0
 
 BUTTON
-397
-116
-464
-149
+707
+130
+774
+163
 NIL
 setup
 NIL
@@ -343,10 +468,10 @@ NIL
 1
 
 BUTTON
-493
-116
-556
-149
+803
+130
+866
+163
 NIL
 go
 T
@@ -360,10 +485,10 @@ NIL
 1
 
 PLOT
-85
-185
-569
-435
+395
+199
+879
+449
 Monitoramento da umidade do solo das plantas
 Tempo
 Umidade do solo
@@ -380,10 +505,10 @@ PENS
 "pen-2" 1.0 0 -2674135 true "" "plot umidade-planta3"
 
 BUTTON
-271
-115
-347
-149
+580
+129
+656
+163
 chover
 evento-chuva
 T
@@ -644,6 +769,21 @@ Polygon -7500403 true true 105 90 120 195 90 285 105 300 135 300 150 225 165 300
 Rectangle -7500403 true true 127 79 172 94
 Polygon -7500403 true true 195 90 240 150 225 180 165 105
 Polygon -7500403 true true 105 90 60 150 75 180 135 105
+
+person farmer
+false
+0
+Polygon -7500403 true true 105 90 120 195 90 285 105 300 135 300 150 225 165 300 195 300 210 285 180 195 195 90
+Polygon -1 true false 60 195 90 210 114 154 120 195 180 195 187 157 210 210 240 195 195 90 165 90 150 105 150 150 135 90 105 90
+Circle -7500403 true true 110 5 80
+Rectangle -7500403 true true 127 79 172 94
+Polygon -13345367 true false 120 90 120 180 120 195 90 285 105 300 135 300 150 225 165 300 195 300 210 285 180 195 180 90 172 89 165 135 135 135 127 90
+Polygon -6459832 true false 116 4 113 21 71 33 71 40 109 48 117 34 144 27 180 26 188 36 224 23 222 14 178 16 167 0
+Line -16777216 false 225 90 270 90
+Line -16777216 false 225 15 225 90
+Line -16777216 false 270 15 270 90
+Line -16777216 false 247 15 247 90
+Rectangle -6459832 true false 240 90 255 300
 
 plant
 false
