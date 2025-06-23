@@ -1,64 +1,213 @@
-breed [ flowers flower ]
-breed [ butterflies butterfly ]
+globals [
+  umidade-media
+  consumo-agua
+  tempo-sem-irrigar
+]
+
+breed [sensores sensor]
+breed [irrigadores irrigador]
+breed [plantas planta]
+
+patches-own [
+  umidade
+  irrigado?
+  planta-aqui?
+]
+
+; você pode colocar isso para configurar fácil no Interface depois:
+; num-plantas = 10 (por exemplo, número par)
 
 to setup
   clear-all
   reset-ticks
-  create-butterflies 90 [
-    setxy random-xcor random-ycor
-    set shape "line"
-    set color 92
-    set size 1.5
+
+  ; configuração inicial do terreno
+  ask patches [
+    set umidade random 50 + 50  ; Umidade inicial entre 50-100%
+    set irrigado? false
+    set pcolor scale-color green umidade 30 100
+    set planta-aqui? false
   ]
-  create-flowers 8 [
-    setxy random-xcor random-ycor
-    set shape "flower"
-    set size 3
+
+  ; criando plantas em filas
+;  create-plantas num-plantas [
+;    set shape "flower"
+;    set color 105
+;    set size 3
+;    move-to one-of patches with [not planta-aqui?]
+;    ask patch-here [set planta-aqui? true]
+;  ]
+;
+;  ; cria um sensor a cada duas plantas
+;  create-sensores num-sensores [
+;    set shape "wheel"
+;    set color gray
+;    set size 2
+;    move-to one-of patches
+;  ]
+;
+;  ; cria irrigadores a cada duas plantas
+;  create-irrigadores num-irrigadores [
+;    set shape "airplane"
+;    set color red
+;    set size 2
+;    move-to one-of patches with [not any? turtles-here]
+;  ]
+
+  ; Suponha que num-plantas seja PAR
+  let espacamento 3
+  let y-planta 0
+  let y-sensor -1
+  let y-irrigador 1
+
+  ; Criando plantas em linha
+  let inicio-x ((num-plantas - 1) / 2) * espacamento * -1
+  let i 0
+  while [i < num-plantas] [
+    let x-pos inicio-x + (i * espacamento)
+    create-plantas 1 [
+      setxy x-pos y-planta
+      set shape "flower"
+      set color 105
+      set size 3
+      ask patch-here [set planta-aqui? true]
+    ]
+    set i i + 1
   ]
+
+  ; Criando sensores entre cada duas plantas
+  set i 0
+  while [i < num-plantas - 1] [
+    let x-pos (i * espacamento + ((i + 1) * espacamento)) / 2
+    create-sensores 1 [
+      setxy x-pos y-sensor
+      set shape "wheel"
+      set color gray
+      set size 2
+    ]
+    set i i + 2
+  ]
+
+  ; Criando irrigadores a cada duas plantas
+  set i 0
+  while [i < num-plantas - 1] [
+    let x-pos (i * espacamento + ((i + 1) * espacamento)) / 2
+    create-irrigadores 1 [
+      setxy x-pos y-irrigador
+      set shape "airplane"
+      set color red
+      set size 2
+    ]
+    set i i + 2
+  ]
+
+  ; calcula valores inicial
+  calcular-umidade-media
+  set consumo-agua 0
+  set tempo-sem-irrigar 0
 end
 
 to go
-  ask butterflies [
-    forward 1
-    pickDirection
+  ; A cada tick, a umidade diminui naturalmente
+  ask patches [
+    set umidade umidade - random 3
+    if umidade < 0 [set umidade 0]
+    update-cor
   ]
+
+  ; Sensores monitoram a umidade
+  ask sensores [
+    monitorar-umidade
+  ]
+
+  ; Irrigadores agem quando necessário
+  ask irrigadores [
+    if any? patches in-radius 3 with [umidade < 40 and planta-aqui?] [
+      irrigar
+    ]
+  ]
+
+  ; Plantas sofrem com falta de água
+  ask plantas [
+    if [umidade] of patch-here < 30 [
+      set color brown  ; planta secando
+    ]
+    if [umidade] of patch-here > 60 [
+      set color 105  ; verde saudável
+    ]
+  ]
+
+  ; Atualiza estatísticas
+  calcular-umidade-media
+  set tempo-sem-irrigar tempo-sem-irrigar + 1
   tick
 end
 
-to pickDirection
-  ; Calcula o ângulo em direção ao canto inferior direito (135 graus no sistema de coordenadas do NetLogo)
-  let target-angle 135
-  ; Define um pequeno desvio aleatório para criar variação no movimento
-  let deviation random-float 30 - 15  ; entre -15 e +15 graus
-  ; Define a nova direção
-  set heading target-angle + deviation
+to monitorar-umidade  ; procedimento do sensor
+  let alvo one-of patches in-radius 2 with [planta-aqui?]
+  if alvo != nobody [
+    if [umidade] of alvo < 40 [
+      let irg one-of irrigadores in-radius 5
+      if irg != nobody [
+        ask irg [
+          irrigar
+        ]
+      ]
+    ]
+  ]
 end
 
-;to pickDirection
-;  set heading 135 + (random-float 10 - 5)  ; apenas ±5 graus de variação
-;end
+to irrigar  ; procedimento do irrigador
+  set tempo-sem-irrigar 0
+  set consumo-agua consumo-agua + 5
+  ask patches in-radius 3 [
+    set umidade umidade + 15
+    if umidade > 100 [set umidade 100]
+    set irrigado? true
+    update-cor
+  ]
+  set color pink  ; indica que está irrigando
+  wait 0.5
+  set color red
+end
 
-;to pickDirection
-;  let flip random 2
-;  ifelse flip = 0 [right random 45][left random 45]
-;end
+to update-cor  ; procedimento do patch
+  set pcolor scale-color green umidade 40 100
+  if irrigado? [
+    set pcolor scale-color blue umidade 40 100
+    set irrigado? false
+  ]
+end
+
+to calcular-umidade-media
+  set umidade-media mean [umidade] of patches with [planta-aqui?]
+end
+
+; Relatório para mostrar estatísticasã
+to relatorio
+  output-print (word "Umidade média: " umidade-media)
+  output-print (word "Consumo total de água: " consumo-agua)
+  output-print (word "Ticks desde última irrigação: " tempo-sem-irrigar)
+  output-print (word "Plantas saudáveis: " count plantas with [color = 105])
+  output-print (word "Plantas com sede: " count plantas with [color = brown])
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
-336
-63
-832
-560
+654
+57
+1091
+495
 -1
 -1
-14.8
+13.0
 1
 10
 1
 1
 1
 0
-1
-1
+0
+0
 1
 -16
 16
@@ -71,11 +220,11 @@ ticks
 30.0
 
 BUTTON
-112
-106
-186
-139
-Setup
+371
+80
+438
+113
+NIL
 setup
 NIL
 1
@@ -88,13 +237,13 @@ NIL
 1
 
 BUTTON
-119
-210
-182
-243
+471
+82
+534
+115
 NIL
 go
-NIL
+T
 1
 T
 OBSERVER
@@ -103,23 +252,96 @@ NIL
 NIL
 NIL
 1
+
+SLIDER
+336
+154
+508
+187
+num-sensores
+num-sensores
+1
+20
+5.0
+1
+1
+NIL
+HORIZONTAL
 
-BUTTON
-85
-311
-222
-348
-go forever
-go
-T
+SLIDER
+337
+205
+509
+238
+num-irrigadores
+num-irrigadores
 1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
+10
+5.0
 1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+338
+255
+510
+288
+num-plantas
+num-plantas
+2
+100
+6.0
+2
+1
+NIL
+HORIZONTAL
+
+SLIDER
+338
+306
+510
+339
+taxa-evaporacao
+taxa-evaporacao
+0.1
+5
+1.1
+0.5
+1
+NIL
+HORIZONTAL
+
+SLIDER
+338
+355
+510
+388
+limiar-irrigacao
+limiar-irrigacao
+20
+50
+36.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+337
+412
+511
+445
+agua-por-irrigacao
+agua-por-irrigacao
+5
+30
+22.0
+1
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?

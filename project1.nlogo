@@ -1,56 +1,75 @@
-breed [ flowers flower ]
-breed [ butterflies butterfly ]
+patches-own [
+  soil-moisture
+]
 
 to setup
   clear-all
+  setup-patches
+  setup-sensors
   reset-ticks
-  create-butterflies 90 [
-    setxy random-xcor random-ycor
-    set shape "line"
-    set color 92
-    set size 1.5
+end
+
+to setup-patches
+  ask patches [
+    set soil-moisture random 100
+    update-color
   ]
-  create-flowers 8 [
+end
+
+to setup-sensors
+  create-turtles 20 [
     setxy random-xcor random-ycor
-    set shape "flower"
-    set size 3
+    set shape "wheel"
+    set color blue
   ]
 end
 
 to go
-  ask butterflies [
-    forward 1
-    pickDirection
+  evaporate
+  ask turtles [
+    monitor-soil
   ]
   tick
 end
 
-to pickDirection
-  ; Calcula o ângulo em direção ao canto inferior direito (135 graus no sistema de coordenadas do NetLogo)
-  let target-angle 135
-  ; Define um pequeno desvio aleatório para criar variação no movimento
-  let deviation random-float 30 - 15  ; entre -15 e +15 graus
-  ; Define a nova direção
-  set heading target-angle + deviation
+to evaporate
+  ask patches [
+    set soil-moisture soil-moisture - (evaporation-rate * soil-moisture)
+    if soil-moisture < 0 [ set soil-moisture 0 ]
+    update-color
+  ]
 end
 
-;to pickDirection
-;  set heading 135 + (random-float 10 - 5)  ; apenas ±5 graus de variação
-;end
+to monitor-soil
+  if [soil-moisture] of patch-here < 30 [
+    irrigate
+  ]
+end
 
-;to pickDirection
-;  let flip random 2
-;  ifelse flip = 0 [right random 45][left random 45]
-;end
+to irrigate
+  ask patch-here [
+    set soil-moisture soil-moisture + irrigation-amount
+    if soil-moisture > 100 [ set soil-moisture 100 ]
+    update-color
+  ]
+end
+
+to update-color
+  set pcolor scale-color green soil-moisture 0 100
+end
+
+to-report average-soil-moisture
+  report mean [soil-moisture] of patches
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
-336
-63
-832
-560
+428
+40
+865
+478
 -1
 -1
-14.8
+13.0
 1
 10
 1
@@ -71,11 +90,11 @@ ticks
 30.0
 
 BUTTON
-112
-106
-186
-139
-Setup
+29
+50
+251
+97
+NIL
 setup
 NIL
 1
@@ -88,13 +107,13 @@ NIL
 1
 
 BUTTON
-119
-210
-182
-243
+32
+120
+245
+173
 NIL
 go
-NIL
+T
 1
 T
 OBSERVER
@@ -103,23 +122,36 @@ NIL
 NIL
 NIL
 1
+
+SLIDER
+19
+279
+398
+312
+evaporation-rate
+evaporation-rate
+0
+1
+0.1
+0.01
+1
+NIL
+HORIZONTAL
 
-BUTTON
-85
-311
-222
-348
-go forever
-go
-T
+SLIDER
+19
+337
+400
+370
+irrigation-amount
+irrigation-amount
+0
+100
+61.0
 1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
 1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
