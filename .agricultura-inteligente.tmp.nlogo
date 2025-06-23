@@ -524,10 +524,10 @@ NIL
 1
 
 SLIDER
-274
-203
-551
-236
+187
+204
+464
+237
 chance-de-chuva
 chance-de-chuva
 0.01
@@ -539,10 +539,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-272
-308
-548
-341
+185
+309
+461
+342
 taxa-evaporacao
 taxa-evaporacao
 1
@@ -554,10 +554,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-273
-254
-548
-287
+186
+255
+461
+288
 duracao-chuva
 duracao-chuva
 0
@@ -569,9 +569,9 @@ NIL
 HORIZONTAL
 
 SWITCH
-310
-370
-509
+223
+371
+422
 404
 interferencia-humana
 interferencia-humana
