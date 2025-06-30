@@ -45,7 +45,7 @@ to setup
 
 ; as velocidades tem objetivo de deixar a visualização do fazendeiro agindo mais clara
   set velocidade-normal 0.5   ; Velocidade padrão da simulação
-  set velocidade-lenta 0.05   ; Velocidade muito reduzida durante ações do fazendeiro
+  set velocidade-lenta 0.10   ; Velocidade muito reduzida durante ações do fazendeiro
   set fazendeiro-ativo? true
   set frame-rate velocidade-normal
 
@@ -222,15 +222,18 @@ to go
 
   monitorar-umidade-plantas
 
-  ifelse fazendeiro-ativo? [
-    set frame-rate velocidade-lenta
-    tick-advance velocidade-lenta
-  ] [
-    set frame-rate velocidade-normal
-    tick-advance velocidade-normal
+  if interferencia-humana [
+    ifelse fazendeiro-ativo? [
+      set frame-rate velocidade-lenta
+      tick-advance velocidade-lenta
+
+    ] [
+      set frame-rate velocidade-normal
+      tick-advance velocidade-normal
+    ]
   ]
 
-  monitoramento-humano
+
 
   tick
 end
@@ -434,7 +437,7 @@ to monitoramento-humano
 
           ; Irrigação manual
           ask patches in-radius 1.8 [  ; Área menor que o irrigador automático
-            set umidade umidade + 0  ; Quantidade menor de água
+            set umidade umidade + 50  ; Quantidade menor de água
             if umidade > 100 [ set umidade 100 ]
 ;            set pcolor scale-color green umidade 60 30
             set pcolor (-0.06 * umidade) + 38
@@ -617,7 +620,7 @@ SWITCH
 262
 interferencia-humana
 interferencia-humana
-0
+1
 1
 -1000
 
@@ -630,7 +633,7 @@ num-plantas-monitoradas
 num-plantas-monitoradas
 1
 10
-5.0
+10.0
 1
 1
 NIL
@@ -645,7 +648,7 @@ num-plantas-nao-monitoradas
 num-plantas-nao-monitoradas
 1
 10
-5.0
+10.0
 1
 1
 NIL
