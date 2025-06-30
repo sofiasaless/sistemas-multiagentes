@@ -158,8 +158,14 @@ to setup-irrigators
   let start-x -8  ; Mesma posição X dos sensores
   let y-pos 1.2   ; Posição Y mais alta que os sensores
 
+;  definindo o numero de irrigadores
+  let num-irrigators (num-plantas-monitoradas / 2) + 1
+  if (num-plantas-monitoradas mod 2 = 0) [
+    set num-irrigators (num-irrigators - 1)
+  ]
+
   ; Cria um irrigador para cada sensor
-  repeat (num-plantas-monitoradas - 1) [
+  repeat num-irrigators [
     create-irrigators 1 [
       setxy start-x y-pos
       set shape "bulldozer top"
@@ -168,7 +174,7 @@ to setup-irrigators
       set label "irrigador"
       set heading 180
     ]
-    set start-x start-x + 2  ; Avança para o próximo par
+    set start-x start-x + 4  ; Avança para o próximo par
   ]
 end
 
@@ -212,7 +218,7 @@ to go
     verificar-irrigacao
   ]
 
-  atualizar-estado-das-plantas
+;  atualizar-estado-das-plantas
 
   monitorar-umidade-plantas
 
@@ -229,39 +235,80 @@ end
 
 ; procedimento que os agentes sensor vao realizar
 to monitorar-plantas
-  let plantas-monitoradas plants in-radius 1.5
-  foreach sort plantas-monitoradas [
-    planta ->
-    let patch-abaixo patch-at ( [xcor] of planta ) ( [ycor] of planta )
-    let umidade-do-solo [umidade] of patch-abaixo
-;    show (word "Planta em (" [xcor] of planta "," [ycor] of planta ") - Umidade do solo: " umidade-do-solo "%")
+;  let plantas-monitoradas plants in-radius 1.5
+;  foreach sort plantas-monitoradas [
+;    planta ->
+;    let patch-abaixo patch-at ( [xcor] of planta ) ( [ycor] of planta )
+;    let umidade-do-solo [umidade] of patch-abaixo
+;;    show (word "Planta em (" [xcor] of planta "," [ycor] of planta ") - Umidade do solo: " umidade-do-solo "%")
+;
+;;    exibindo alerta em caso de mudança do estado da planta
+;    if [estado-saude] of planta = "desidratada" [
+;      show (word "ALERTA: Planta em (" [xcor] of planta "," [ycor] of planta ") precisa de água!")
+;      ; a chamada do procedimento de irrigacao deve acontecer aqui posteriormente....
+;    ]
+;    if [estado-saude] of planta = "murcha" [
+;      show (word "ALERTA CRÍTICO: Planta em (" [xcor] of planta "," [ycor] of planta ") está murchando!")
+;    ]
+;  ]
 
-;    exibindo alerta em caso de mudança do estado da planta
-    if [estado-saude] of planta = "desidratada" [
-      show (word "ALERTA: Planta em (" [xcor] of planta "," [ycor] of planta ") precisa de água!")
-      ; a chamada do procedimento de irrigacao deve acontecer aqui posteriormente....
-    ]
-    if [estado-saude] of planta = "murcha" [
-      show (word "ALERTA CRÍTICO: Planta em (" [xcor] of planta "," [ycor] of planta ") está murchando!")
+  ask sensors [
+    ; Monitora plantas em um raio de 1.5 patches
+    let plantas-monitoradas plants in-radius 1.5
+
+    foreach sort plantas-monitoradas [
+      planta ->
+      let patch-abaixo patch-at ([xcor] of planta) ([ycor] of planta)
+      let umidade-do-solo [umidade] of patch-abaixo
+
+      ; Exibe alertas conforme o estado da planta
+      if [estado-saude] of planta = "desidratada" [
+;        show (word "ALERTA: Planta em (" [xcor] of planta "," [ycor] of planta ") precisa de água!")
+      ]
+      if [estado-saude] of planta = "murcha" [
+;        show (word "ALERTA CRÍTICO: Planta em (" [xcor] of planta "," [ycor] of planta ") está murchando!")
+      ]
     ]
   ]
 end
 
 ; procedimento do agente do irrigador
 to verificar-irrigacao
-  let plantas-proximas plants in-radius 1.5 ; alcance do irrigador é o mesmo do sensor
-  let precisa-irrigar false
+;  let plantas-proximas plants in-radius 1.5 ; alcance do irrigador é o mesmo do sensor
+;  let precisa-irrigar false
+;
+;  foreach sort plantas-proximas [
+;    planta ->
+;    if ([estado-saude] of planta = "desidratada" or [estado-saude] of planta = "murcha") [
+;      set precisa-irrigar true
+;    ]
+;  ]
+;
+;;  de acordo com o estado das plantas que foram observadas pelo sensor, o irrigador vai ser ativado
+;  if precisa-irrigar [
+;    irrigar
+;  ]
 
-  foreach sort plantas-proximas [
-    planta ->
-    if ([estado-saude] of planta = "desidratada" or [estado-saude] of planta = "murcha") [
-      set precisa-irrigar true
+  ask irrigators [
+    ; Encontra as plantas abaixo do irrigador (no alcance)
+    let plantas-no-alcance plants in-radius 2.5  ; Raio maior para cobrir plantas adjacentes
+
+    ; Verifica se alguma planta precisa de irrigação
+    let precisa-irrigar false
+    foreach sort plantas-no-alcance [
+      planta ->
+      if ([estado-saude] of planta = "desidratada" or [estado-saude] of planta = "murcha") [
+        set precisa-irrigar true
+      ]
     ]
-  ]
 
-;  de acordo com o estado das plantas que foram observadas pelo sensor, o irrigador vai ser ativado
-  if precisa-irrigar [
-    irrigar
+    ; Ativa irrigação se necessário
+    if precisa-irrigar [
+      show ("Precisa irrigar, entrei no if")
+      irrigar
+    ]
+
+    atualizar-estado-das-plantas
   ]
 end
 
@@ -270,7 +317,7 @@ to irrigar
   show " Ativando o irrigador!"
   set color red ; a cor vai mudar para indicar que esta ativo e irrigando
 
-  ask patches in-radius 2.2 [
+  ask patches in-radius 2.5 [
     set umidade umidade + 15 ; aumentando a umidade por causa da agua que ta sendo irrigada
     ifelse umidade > 100 [
       set umidade 100
@@ -329,12 +376,6 @@ to atualizar-estado-das-plantas
       ]
     ]
 
-    ; agora se ficou muito tempo sem água, o estado de saude vai piorar
-;    if tempo-sem-agua > 20 and estado-saude != "morta" [
-;      set estado-saude "murcha"
-;      set color orange
-;      set label "murcha"
-;    ]
   ]
 end
 
@@ -483,10 +524,10 @@ to clear-irrigators
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-1096
-42
-1709
-656
+944
+38
+1557
+536
 -1
 -1
 28.81
@@ -501,8 +542,8 @@ GRAPHICS-WINDOW
 1
 -10
 10
--10
-10
+-8
+8
 0
 0
 1
@@ -510,10 +551,10 @@ ticks
 30.0
 
 BUTTON
-520
-66
-587
-99
+368
+62
+435
+95
 NIL
 setup
 NIL
@@ -527,10 +568,10 @@ NIL
 1
 
 BUTTON
-616
-66
-679
-99
+464
+62
+527
+95
 NIL
 go
 T
@@ -544,10 +585,10 @@ NIL
 1
 
 BUTTON
-393
-65
-469
-99
+241
+61
+317
+95
 chover
 evento-chuva
 T
@@ -561,40 +602,40 @@ NIL
 1
 
 SLIDER
-778
-66
-1055
-99
+626
+62
+903
+95
 chance-de-chuva
 chance-de-chuva
 0.01
 0.5
-0.09
+0.08
 0.01
 1
 NIL
 HORIZONTAL
 
 SLIDER
-776
-171
-1052
-204
+624
+167
+900
+200
 taxa-evaporacao
 taxa-evaporacao
 1
 10
-2.0
+3.0
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-777
-117
-1052
-150
+625
+113
+900
+146
 duracao-chuva
 duracao-chuva
 0
@@ -606,10 +647,10 @@ NIL
 HORIZONTAL
 
 SWITCH
-814
-233
-1013
-266
+662
+229
+861
+262
 interferencia-humana
 interferencia-humana
 1
@@ -617,10 +658,10 @@ interferencia-humana
 -1000
 
 SLIDER
-420
-176
-640
-209
+268
+172
+488
+205
 num-plantas-monitoradas
 num-plantas-monitoradas
 1
@@ -632,10 +673,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-408
-233
-657
-266
+256
+229
+505
+262
 num-plantas-nao-monitoradas
 num-plantas-nao-monitoradas
 1
