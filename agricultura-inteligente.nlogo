@@ -65,24 +65,9 @@ end
 
 ; configuraçao inicial dos agentes (sensores, irrigadores e chuva)
 to setup-agentes
-  ; cria 1 sensor que monitora as 2 primeiras plantas
-  create-sensors 1 [
-    setxy -1 0.3
-    set shape "ufo top"
-    set size 1
-    set color blue
-    set label "sensor"
-  ]
 
-  ; cria 1 irrigador proximo ao sensor
-  create-irrigators 1 [
-    setxy -1 1
-    set shape "bulldozer top"
-    set size 1.3
-    set color cyan
-    set label "irrigador"
-    set heading 180
-  ]
+  setup-sensors
+  setup-irrigators
 
 ;  criando o agente de chuva
   create-chuvas 80 [
@@ -109,23 +94,81 @@ end
 ; o setup das plantas fica separado porque a localizaçao delas ainda nao esta automatica
 ; as duas primeiras plantas sao monitoradas pelo sensor, a planta mais distante na direita nao recebe monitoramento do sensor
 to setup-plants
-  ; condernadas inicial das plantas
-  let y 0
-  let plant-x-start -2
+  clear-plants  ; Remove plantas existentes
 
-  ; cria as 2 plantas que vao receber o monitoramento do sensor e a irrigacao
-  ; e uma planta mais distante que nao vai receber a irrigacao nem o monitoramento do sensor
-  repeat 3 [
+  ; Configuração inicial
+  let start-x -9  ; Posição X inicial
+  let y-pos 0     ; Posição Y (todas na mesma linha)
+  let espacamento 2  ; Distância entre plantas
+
+  ; Cria plantas monitoradas (com sensor)
+  repeat num-plantas-monitoradas [
     create-plants 1 [
-      setxy plant-x-start y
+      setxy start-x y-pos
       set shape "plant"
       set size 1.4
       set color green
       set label "saudavel"
       set estado-saude "saudavel"
-;      set tempo-sem-agua 0
     ]
-    set plant-x-start plant-x-start + 2
+    set start-x start-x + espacamento
+  ]
+
+  ; Cria plantas não monitoradas (sem sensor)
+
+  set start-x -9
+  set y-pos -4
+  repeat num-plantas-nao-monitoradas [
+    create-plants 1 [
+      setxy start-x y-pos
+      set shape "plant"
+      set size 1.4
+      set color green
+      set label "saudavel"
+      set estado-saude "saudavel"
+    ]
+    set start-x start-x + espacamento
+  ]
+end
+
+to setup-sensors
+  clear-sensors
+
+  ; Posiciona sensores entre as plantas monitoradas
+  let start-x -8  ; Posição X inicial (entre a 1a e 2a planta)
+  let y-pos 0.3   ; Posição Y (ligeiramente acima do solo)
+
+  ; Cria um sensor para cada espaço entre plantas monitoradas
+  repeat (num-plantas-monitoradas - 1) [
+    create-sensors 1 [
+      setxy start-x y-pos
+      set shape "ufo top"
+      set size 1
+      set color blue
+      set label "sensor"
+    ]
+    set start-x start-x + 2  ; Avança para o próximo par
+  ]
+end
+
+to setup-irrigators
+  clear-irrigators
+
+  ; Posiciona irrigadores acima dos sensores
+  let start-x -8  ; Mesma posição X dos sensores
+  let y-pos 1.2   ; Posição Y mais alta que os sensores
+
+  ; Cria um irrigador para cada sensor
+  repeat (num-plantas-monitoradas - 1) [
+    create-irrigators 1 [
+      setxy start-x y-pos
+      set shape "bulldozer top"
+      set size 1.3
+      set color cyan
+      set label "irrigador"
+      set heading 180
+    ]
+    set start-x start-x + 2  ; Avança para o próximo par
   ]
 end
 
@@ -424,15 +467,29 @@ to monitoramento-humano
     set tempo-para-proxima-visita tempo-para-proxima-visita - 1
   ]
 end
+
+
+; procedimentos para limpar agentes
+to clear-plants
+  ask plants [ die ]
+end
+
+to clear-sensors
+  ask sensors [ die ]
+end
+
+to clear-irrigators
+  ask irrigators [ die ]
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
-590
-174
-1070
-655
+1096
+42
+1709
+656
 -1
 -1
-52.44444444444444
+28.81
 1
 10
 1
@@ -442,10 +499,10 @@ GRAPHICS-WINDOW
 1
 1
 1
--4
-4
--4
-4
+-10
+10
+-10
+10
 0
 0
 1
@@ -453,10 +510,10 @@ ticks
 30.0
 
 BUTTON
-401
-103
-468
-136
+520
+66
+587
+99
 NIL
 setup
 NIL
@@ -470,10 +527,10 @@ NIL
 1
 
 BUTTON
-497
-103
-560
-136
+616
+66
+679
+99
 NIL
 go
 T
@@ -486,31 +543,11 @@ NIL
 NIL
 1
 
-PLOT
-1180
-187
-1664
-437
-Monitoramento da umidade do solo das plantas
-Tempo
-Umidade do solo
-0.0
-10.0
-0.0
-100.0
-true
-false
-"" ""
-PENS
-"Planta 1" 1.0 0 -16777216 true "" "plot umidade-planta1"
-"Planta 2" 1.0 0 -7500403 true "" "plot umidade-planta2"
-"pen-2" 1.0 0 -2674135 true "" "plot umidade-planta3"
-
 BUTTON
-274
-102
-350
-136
+393
+65
+469
+99
 chover
 evento-chuva
 T
@@ -524,10 +561,10 @@ NIL
 1
 
 SLIDER
-274
-203
-551
-236
+778
+66
+1055
+99
 chance-de-chuva
 chance-de-chuva
 0.01
@@ -539,10 +576,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-272
-308
-548
-341
+776
+171
+1052
+204
 taxa-evaporacao
 taxa-evaporacao
 1
@@ -554,10 +591,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-273
-254
-548
-287
+777
+117
+1052
+150
 duracao-chuva
 duracao-chuva
 0
@@ -569,15 +606,45 @@ NIL
 HORIZONTAL
 
 SWITCH
-310
-370
-509
-404
+814
+233
+1013
+266
 interferencia-humana
 interferencia-humana
 1
 1
 -1000
+
+SLIDER
+420
+176
+640
+209
+num-plantas-monitoradas
+num-plantas-monitoradas
+1
+10
+5.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+408
+233
+657
+266
+num-plantas-nao-monitoradas
+num-plantas-nao-monitoradas
+1
+10
+5.0
+1
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
