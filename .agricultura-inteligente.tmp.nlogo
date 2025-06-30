@@ -44,9 +44,9 @@ to setup
   set duracao-chuva-cod 0
 
 ; as velocidades tem objetivo de deixar a visualização do fazendeiro agindo mais clara
-  set velocidade-normal 0.05
-  set velocidade-lenta 0.3
-  set fazendeiro-ativo? false
+  set velocidade-normal 0.5   ; Velocidade padrão da simulação
+  set velocidade-lenta 0.05   ; Velocidade muito reduzida durante ações do fazendeiro
+  set fazendeiro-ativo? true
   set frame-rate velocidade-normal
 
   setup-patches
@@ -70,7 +70,7 @@ to setup-agentes
   setup-irrigators
 
 ;  criando o agente de chuva
-  create-chuvas 80 [
+  create-chuvas 100 [
     setxy random-xcor random-ycor
     set shape "line half"
     set color 95
@@ -223,8 +223,10 @@ to go
   monitorar-umidade-plantas
 
   ifelse fazendeiro-ativo? [
+    set frame-rate velocidade-lenta
     tick-advance velocidade-lenta
   ] [
+    set frame-rate velocidade-normal
     tick-advance velocidade-normal
   ]
 
@@ -235,23 +237,6 @@ end
 
 ; procedimento que os agentes sensor vao realizar
 to monitorar-plantas
-;  let plantas-monitoradas plants in-radius 1.5
-;  foreach sort plantas-monitoradas [
-;    planta ->
-;    let patch-abaixo patch-at ( [xcor] of planta ) ( [ycor] of planta )
-;    let umidade-do-solo [umidade] of patch-abaixo
-;;    show (word "Planta em (" [xcor] of planta "," [ycor] of planta ") - Umidade do solo: " umidade-do-solo "%")
-;
-;;    exibindo alerta em caso de mudança do estado da planta
-;    if [estado-saude] of planta = "desidratada" [
-;      show (word "ALERTA: Planta em (" [xcor] of planta "," [ycor] of planta ") precisa de água!")
-;      ; a chamada do procedimento de irrigacao deve acontecer aqui posteriormente....
-;    ]
-;    if [estado-saude] of planta = "murcha" [
-;      show (word "ALERTA CRÍTICO: Planta em (" [xcor] of planta "," [ycor] of planta ") está murchando!")
-;    ]
-;  ]
-
   ask sensors [
     ; Monitora plantas em um raio de 1.5 patches
     let plantas-monitoradas plants in-radius 1.5
@@ -274,20 +259,6 @@ end
 
 ; procedimento do agente do irrigador
 to verificar-irrigacao
-;  let plantas-proximas plants in-radius 1.5 ; alcance do irrigador é o mesmo do sensor
-;  let precisa-irrigar false
-;
-;  foreach sort plantas-proximas [
-;    planta ->
-;    if ([estado-saude] of planta = "desidratada" or [estado-saude] of planta = "murcha") [
-;      set precisa-irrigar true
-;    ]
-;  ]
-;
-;;  de acordo com o estado das plantas que foram observadas pelo sensor, o irrigador vai ser ativado
-;  if precisa-irrigar [
-;    irrigar
-;  ]
 
   ask irrigators [
     ; Encontra as plantas abaixo do irrigador (no alcance)
@@ -304,7 +275,7 @@ to verificar-irrigacao
 
     ; Ativa irrigação se necessário
     if precisa-irrigar [
-      show ("Precisa irrigar, entrei no if")
+;      show ("Precisa irrigar, entrei no if")
       irrigar
     ]
 
@@ -347,13 +318,6 @@ to atualizar-estado-das-plantas
   ask plants [
     let umidade-do-solo [umidade] of patch-here
 
-    ; atualizando o contador de tempo sem agua para monitoramento futuro
-;    ifelse umidade-do-solo < 60 [
-;      set tempo-sem-agua tempo-sem-agua + 1
-;    ] [
-;      set tempo-sem-agua 0
-;    ]
-
     ifelse umidade-do-solo >= 60 [
       set color green
       set label "saudavel"
@@ -388,7 +352,7 @@ to evento-chuva
     set hidden? false
     ask patch-here [
 ;      a chuva aqui pode ocasionar em inundacoes das plantas, o que o sensor tambem vai capturar e informar
-      set umidade umidade + random-float 5
+      set umidade umidade + random-float 10
       ifelse umidade > 100 [
         set umidade 100
         set pcolor 32
@@ -425,90 +389,90 @@ end
 ; procedimento de monitoramento que o fazendeiro ira fazer
 to monitoramento-humano
   ask fazendeiros [
-    if tempo-para-proxima-visita <= 0 and not fazendeiro-ativo? [
-      set fazendeiro-ativo? true
-      set frame-rate velocidade-lenta  ; Diminui a velocidade
+    if tempo-para-proxima-visita <= 0 [
+      set fazendeiro-ativo? true  ; Ativa o modo lento
+      set hidden? false
 
-      let planta-alvo one-of plants with [xcor = 2 and ycor = 0]
-      ifelse planta-alvo != nobody [
-        set hidden? false
-        show "Fazendeiro está a caminho da planta não monitorada!"
+      ; Lista de TODAS as plantas na linha y = -4 (não apenas uma por visita)
+      let plantas-para-avaliar plants with [ycor = -4]
 
-        ; Animação de caminhada até a planta
-        let destino-x [xcor] of planta-alvo
-        let destino-y [ycor] of planta-alvo + 1  ; o agente do fazendeiro vai parar proximo a planta que nao ta sendo monitorada
+      ; Visita cada planta sequencialmente
+      foreach sort-on [xcor] plantas-para-avaliar [
+        [planta] ->
+        ; Movimento até a planta (com visualização lenta)
+        let destino-x [xcor] of planta
+        let destino-y [ycor] of planta + 0.5  ; Para parar perto da planta
 
-        ; Caminhada com passo a passo visível
         while [distancexy destino-x destino-y > 0.5] [
           facexy destino-x destino-y
-          forward 0.3
-          wait 0.1  ; pausa entre os passos para possibilitar a visualização
+          forward 0.2
+          display
+          wait 0.05  ; Pequena pausa entre passos
         ]
 
+        ; Avaliação com chance de erro
         show "Fazendeiro está avaliando a planta..."
-        wait 1
+        let avaliacao [estado-saude] of planta
+        if random-float 1.0 < 0.2 [  ; 20% de chance de erro
+          set avaliacao one-of ["saudavel" "desidratada" "murcha"]
+          show "Fazendeiro está em dúvida sobre a avaliação..."
+        ]
 
-        ; curta animação para dizer que o fazendeiro está avaliando a planta
+        ; Animação de avaliação (piscar)
         repeat 3 [
-          set color red
-          wait 0.2
+          set color red - 2
+          wait 0.3
           set color 137
-          wait 0.2
+          wait 0.3
+          display
         ]
 
-        ; a decisão que o fazendeiro tomar poderá ter erros
-        let avaliacao [estado-saude] of planta-alvo
-        if random-float 1.0 < 0.2 [
-          set avaliacao item random 3 ["saudavel" "desidratada" "murcha"]
-          show "Fazendeiro está em dúvida..."
-          wait 0.5
-        ]
+        ; DECISÃO DE REGAR (se necessário)
+        if avaliacao != "saudavel" [
+          show (word "Fazendeiro está regando a planta (avaliou como: " avaliacao ")")
+          set color orange
 
-        ifelse avaliacao != "saudavel" [
-          show (word "Fazendeiro decidiu regar (avaliou como: " avaliacao ")")
+          ; Irrigação manual
+          ask patches in-radius 1.8 [  ; Área menor que o irrigador automático
+            set umidade umidade + 0  ; Quantidade menor de água
+            if umidade > 100 [ set umidade 100 ]
+;            set pcolor scale-color green umidade 60 30
+            set pcolor (-0.06 * umidade) + 38
+          ]
 
-          ; regando
-          set color red
-          ask patches in-radius 1.5 [
-            set umidade umidade + 15
-            ifelse umidade > 100 [
-              set umidade 100
-              set pcolor 32
-            ]
-            [
+          ; Efeito visual da rega
+          repeat 5 [
+            ask patches in-radius 1.5 [
+;              set pcolor pcolor + 1.5  ; Claro momentâneo
               set pcolor (-0.06 * umidade) + 38
             ]
-          ]
-
-          ; efeito visual da água
-          repeat 5 [
-            ask patches in-radius 2 [
-              set pcolor 108
-            ]
+            display
             wait 0.1
           ]
-          wait 0.5
-          set color 35
-        ] [
-          show "Fazendeiro avaliou que não precisa regar"
-        ]
 
-        show "Fazendeiro está indo embora..."
-        setxy 10 10
-        wait 0.5
-      ] [
-        set tempo-para-proxima-visita 5
+          set color 137
+          wait 0.5
+        ]
       ]
 
+      ; Só retorna após avaliar TODAS as plantas
+      show "Fazendeiro concluiu a visita e está retornando..."
+      while [distancexy 10 10 > 0.5] [
+        facexy 10 10
+        forward 0.3
+        display
+        wait 0.05
+      ]
+      setxy 10 10
       set hidden? true
+
+      ; Agenda próxima visita
+      set tempo-para-proxima-visita random 5 + 20
       set fazendeiro-ativo? false
-      set frame-rate velocidade-normal  ; Restaura velocidade normal
-      set tempo-para-proxima-visita random 30 + 20
     ]
     set tempo-para-proxima-visita tempo-para-proxima-visita - 1
   ]
 end
-
 
 ; procedimentos para limpar agentes
 to clear-plants
@@ -527,7 +491,7 @@ GRAPHICS-WINDOW
 944
 38
 1557
-652
+536
 -1
 -1
 28.81
@@ -542,8 +506,8 @@ GRAPHICS-WINDOW
 1
 -10
 10
--10
-10
+-8
+8
 0
 0
 1
@@ -625,7 +589,7 @@ taxa-evaporacao
 taxa-evaporacao
 1
 10
-3.0
+2.0
 1
 1
 NIL
@@ -653,7 +617,7 @@ SWITCH
 262
 interferencia-humana
 interferencia-humana
-1
+0
 1
 -1000
 
