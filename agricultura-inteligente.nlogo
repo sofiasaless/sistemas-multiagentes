@@ -45,7 +45,7 @@ to setup
 
 ; as velocidades tem objetivo de deixar a visualização do fazendeiro agindo mais clara
   set velocidade-normal 0.5   ; Velocidade padrão da simulação
-  set velocidade-lenta 0.05   ; Velocidade muito reduzida durante ações do fazendeiro
+  set velocidade-lenta 0.10   ; Velocidade muito reduzida durante ações do fazendeiro
   set fazendeiro-ativo? true
   set frame-rate velocidade-normal
 
@@ -58,7 +58,7 @@ end
 to setup-patches
   ask patches [
     ; deixa o solo com aparência de solo agrícola (variação de umidade com cores)
-    set umidade 90
+    set umidade 80
     set pcolor (-0.06 * umidade) + 38
   ]
 end
@@ -222,21 +222,41 @@ to go
 
   monitorar-umidade-plantas
 
-  ifelse fazendeiro-ativo? [
-    set frame-rate velocidade-lenta
-    tick-advance velocidade-lenta
-  ] [
-    set frame-rate velocidade-normal
-    tick-advance velocidade-normal
+  if interferencia-humana [
+    ifelse fazendeiro-ativo? [
+      set frame-rate velocidade-lenta
+      tick-advance velocidade-lenta
+      monitoramento-humano
+    ] [
+      set frame-rate velocidade-normal
+      tick-advance velocidade-normal
+    ]
   ]
-
-  monitoramento-humano
 
   tick
 end
 
 ; procedimento que os agentes sensor vao realizar
 to monitorar-plantas
+;  ask sensors [
+;    ; Monitora plantas em um raio de 1.5 patches
+;    let plantas-monitoradas plants in-radius 1.5
+;
+;    foreach sort plantas-monitoradas [
+;      planta ->
+;      let patch-abaixo patch-at ([xcor] of planta) ([ycor] of planta)
+;      let umidade-do-solo [umidade] of patch-abaixo
+;
+;      ; Exibe alertas conforme o estado da planta
+;      if [estado-saude] of planta = "desidratada" [
+;;        show (word "ALERTA: Planta em (" [xcor] of planta "," [ycor] of planta ") precisa de água!")
+;      ]
+;      if [estado-saude] of planta = "murcha" [
+;;        show (word "ALERTA CRÍTICO: Planta em (" [xcor] of planta "," [ycor] of planta ") está murchando!")
+;      ]
+;    ]
+;  ]
+
   ask sensors [
     ; Monitora plantas em um raio de 1.5 patches
     let plantas-monitoradas plants in-radius 1.5
@@ -246,7 +266,14 @@ to monitorar-plantas
       let patch-abaixo patch-at ([xcor] of planta) ([ycor] of planta)
       let umidade-do-solo [umidade] of patch-abaixo
 
-      ; Exibe alertas conforme o estado da planta
+      ; Verifica se a planta está alagada
+      if [estado-saude] of planta = "alagada" [
+        show (word "ALERTA DE ALAGAMENTO: Planta em (" [xcor] of planta "," [ycor] of planta ")")
+
+        chamar-fazendeiro planta  ; Novo procedimento para chamar o fazendeiro
+      ]
+
+      ; Alertas existentes para outros estados
       if [estado-saude] of planta = "desidratada" [
 ;        show (word "ALERTA: Planta em (" [xcor] of planta "," [ycor] of planta ") precisa de água!")
       ]
@@ -318,11 +345,16 @@ to atualizar-estado-das-plantas
   ask plants [
     let umidade-do-solo [umidade] of patch-here
 
-    ifelse umidade-do-solo >= 60 [
-      set color green
-      set label "saudavel"
-      set estado-saude "saudavel"
+    ifelse umidade-do-solo > 100 [
+      set color blue
+      set label "alagada"
+      set estado-saude "alagada"
     ] [
+      if umidade-do-solo >= 60 and umidade-do-solo <= 100 [
+        set color green
+        set label "saudavel"
+        set estado-saude "saudavel"
+      ]
       if umidade-do-solo < 60 and umidade-do-solo >= 40 [
         set color yellow
         set label "desidratada"
@@ -352,10 +384,10 @@ to evento-chuva
     set hidden? false
     ask patch-here [
 ;      a chuva aqui pode ocasionar em inundacoes das plantas, o que o sensor tambem vai capturar e informar
-      set umidade umidade + random-float 10
+      set umidade umidade + random-float 8
       ifelse umidade > 100 [
-        set umidade 100
-        set pcolor 32
+;        set umidade 100
+        set pcolor 96
       ][ set pcolor (-0.06 * umidade) + 38 ]
 
     ]
@@ -414,12 +446,12 @@ to monitoramento-humano
         show "Fazendeiro está avaliando a planta..."
         let avaliacao [estado-saude] of planta
         if random-float 1.0 < 0.2 [  ; 20% de chance de erro
-          set avaliacao one-of ["saudavel" "desidratada" "murcha"]
+          set avaliacao one-of ["saudavel" "desidratada" "murcha" "alagada"]
           show "Fazendeiro está em dúvida sobre a avaliação..."
         ]
 
         ; Animação de avaliação (piscar)
-        repeat 3 [
+        repeat 2 [
           set color red - 2
           wait 0.3
           set color 137
@@ -429,29 +461,54 @@ to monitoramento-humano
 
         ; DECISÃO DE REGAR (se necessário)
         if avaliacao != "saudavel" [
-          show (word "Fazendeiro está regando a planta (avaliou como: " avaliacao ")")
-          set color orange
+          ifelse avaliacao = "desidratada" or avaliacao = "murcha" [
+            show (word "Fazendeiro está regando a planta (avaliou como: " avaliacao ")")
+            set color orange
 
-          ; Irrigação manual
-          ask patches in-radius 1.8 [  ; Área menor que o irrigador automático
-            set umidade umidade + 50  ; Quantidade menor de água
-            if umidade > 100 [ set umidade 100 ]
-;            set pcolor scale-color green umidade 60 30
-            set pcolor (-0.06 * umidade) + 38
-          ]
-
-          ; Efeito visual da rega
-          repeat 5 [
-            ask patches in-radius 1.5 [
-;              set pcolor pcolor + 1.5  ; Claro momentâneo
+            ; Irrigação manual
+            ask patches in-radius 1.8 [  ; Área menor que o irrigador automático
+              set umidade umidade + 50  ; Quantidade menor de água
+              if umidade > 100 [ set umidade 100 ]
+              ;            set pcolor scale-color green umidade 60 30
               set pcolor (-0.06 * umidade) + 38
             ]
-            display
-            wait 0.1
-          ]
 
-          set color 137
-          wait 0.5
+            ; Efeito visual da rega
+            repeat 3 [
+              ask patches in-radius 1.5 [
+                ;              set pcolor pcolor + 1.5  ; Claro momentâneo
+                set pcolor (-0.06 * umidade) + 38
+              ]
+              display
+              wait 0.1
+            ]
+
+            set color 137
+            wait 0.5
+          ] [
+            ; procedimento pro fazendeiro cuidar da planta alagada
+            show (word "Fazendeiro está cuidando da planta (avaliou como: " avaliacao ")")
+            set color orange
+
+            ; Irrigação manual
+            ask patches in-radius 1.8 [  ; Área menor que o irrigador automático
+              set umidade 100  ; normalizando a umidade do solo
+              set pcolor (-0.06 * umidade) + 38
+            ]
+
+            ; Efeito visual do processo
+            repeat 3 [
+              ask patches in-radius 1.5 [
+                ;              set pcolor pcolor + 1.5  ; Claro momentâneo
+                set pcolor (-0.06 * umidade) + 38
+              ]
+              display
+              wait 0.1
+            ]
+
+            set color 137
+            wait 0.5
+          ]
         ]
       ]
 
@@ -459,9 +516,9 @@ to monitoramento-humano
       show "Fazendeiro concluiu a visita e está retornando..."
       while [distancexy 10 10 > 0.5] [
         facexy 10 10
-        forward 0.3
+        forward 1
         display
-        wait 0.05
+;        wait 0.05
       ]
       setxy 10 10
       set hidden? true
@@ -472,6 +529,154 @@ to monitoramento-humano
     ]
     set tempo-para-proxima-visita tempo-para-proxima-visita - 1
   ]
+end
+
+to chamar-fazendeiro [planta-alagada]
+;  if any? fazendeiros [
+;    ask one-of fazendeiros [
+;      ; Interrompe qualquer ação atual
+;      set tempo-para-proxima-visita 0
+;      set fazendeiro-ativo? true
+;      set hidden? false
+;
+;      ; Define a planta alagada como prioridade
+;      let destino-x [xcor] of planta-alagada
+;      let destino-y [ycor] of planta-alagada
+;
+;      show (word "Fazendeiro a caminho da planta alagada em (" destino-x "," destino-y ")")
+;
+;      ; Movimento rápido até a planta
+;      facexy destino-x destino-y
+;      while [distancexy destino-x destino-y > 0.5] [
+;        forward 0.5  ; Movimento mais rápido para emergência
+;        display
+;      ]
+;
+;      ; Procedimento de desalagar
+;      cuidar-planta-alagada planta-alagada
+;
+;      ; Retorna à base
+;      setxy 10 10
+;      set hidden? true
+;      set fazendeiro-ativo? false
+;      set tempo-para-proxima-visita random 20 + 10  ; Reinicia o timer
+;    ]
+;  ]
+
+  if any? fazendeiros [
+    ask one-of fazendeiros [
+      set tempo-para-proxima-visita 0
+      set fazendeiro-ativo? true
+      set hidden? false
+      set frame-rate velocidade-lenta  ; Garante velocidade lenta
+
+      let destino-x [xcor] of planta-alagada
+      let destino-y [ycor] of planta-alagada
+
+      ; Animação de caminhada até a planta (bem mais lenta)
+;      show "🚜 Fazendeiro em missão de desalagamento!"
+      while [distancexy destino-x destino-y > 0.5] [
+        facexy destino-x destino-y
+        forward 0.50  ; Passos menores
+;        wiggle  ; Pequeno movimento lateral para efeito realista (ver procedimento abaixo)
+        display
+        wait 0.1  ; Pausa entre passos
+      ]
+
+      ; Chegou na planta - animação especial
+;      show "💦 Fazendeiro chegou na planta alagada!"
+      repeat 3 [
+        set size 1.4
+        wait 0.3
+        set size 1.3
+        wait 0.3
+        display
+      ]
+
+      cuidar-planta-alagada planta-alagada  ; Procedimento com animação detalhada
+
+      ; Retorno animado
+;      show "✅ Missão cumprida! Retornando à base..."
+      while [distancexy 10 10 > 0.5] [
+        facexy 10 10
+        forward 1
+        display
+        wait 0.1
+      ]
+
+      setxy 10 10
+      set hidden? true
+      set fazendeiro-ativo? false
+      set tempo-para-proxima-visita random 20 + 10
+      set frame-rate velocidade-normal
+    ]
+  ]
+
+end
+
+to cuidar-planta-alagada [planta]
+;  show "Iniciando processo de desalagamento..."
+  set color red
+
+  ; Efeito de drenagem (reduz rapidamente a umidade)
+  repeat 3 [
+    ask patches in-radius 2 [
+      set umidade 100 ; Redução mais agressiva da umidade
+;      if umidade < 0 [ set umidade 0 ]
+      set pcolor (-0.06 * umidade) + 38
+    ]
+    display
+    wait 0.2
+  ]
+
+  ; Atualiza estado da planta após desalagamento
+  ask planta [
+      set estado-saude "saudavel"
+      set color green
+      set label "saudavel"
+  ]
+
+  set color 137
+;  show "Desalagamento concluído!"
+
+;  show "⏳ Iniciando desalagamento..."
+;  set color red
+;
+;  ; Efeito de ferramenta sendo preparada
+;  repeat 2 [
+;    set shape "person farmer"  ; Forma normal
+;    wait 0.2
+;    display
+;  ]
+;
+;  ; Processo de drenagem com estágios visíveis
+;  let contador 5
+;  while [contador > 0] [
+;    ask patches in-radius 2 [
+;      set umidade 100
+;      if umidade < 0 [ set umidade 0 ]
+;      set pcolor scale-color green umidade 100 0  ; Mapeia cores
+;    ]
+;
+;    ; Efeito visual na planta
+;    ask planta [
+;      set size 1.5 - (0.1 * contador)  ; Reduz gradualmente
+;      if umidade < 60 [
+;        set estado-saude "saudavel"
+;        set color green
+;        set label "saudavel"
+;      ]
+;    ]
+;
+;    ; Contagem regressiva visual
+;    set label contador
+;    set contador contador - 1
+;    wait 0.5
+;    display
+;  ]
+;
+;
+;  show "🌱 Desalagamento concluído com sucesso!"
 end
 
 ; procedimentos para limpar agentes
@@ -488,10 +693,10 @@ to clear-irrigators
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-944
-38
-1557
-536
+1000
+134
+1613
+632
 -1
 -1
 28.81
@@ -515,10 +720,10 @@ ticks
 30.0
 
 BUTTON
-368
-62
-435
-95
+463
+181
+530
+214
 NIL
 setup
 NIL
@@ -532,10 +737,10 @@ NIL
 1
 
 BUTTON
-464
-62
-527
-95
+559
+181
+622
+214
 NIL
 go
 T
@@ -549,10 +754,10 @@ NIL
 1
 
 BUTTON
-241
-61
-317
-95
+336
+180
+412
+214
 chover
 evento-chuva
 T
@@ -566,25 +771,25 @@ NIL
 1
 
 SLIDER
-626
-62
-903
-95
+682
+158
+959
+191
 chance-de-chuva
 chance-de-chuva
 0.01
 0.5
-0.08
+0.22
 0.01
 1
 NIL
 HORIZONTAL
 
 SLIDER
-624
-167
-900
-200
+680
+263
+956
+296
 taxa-evaporacao
 taxa-evaporacao
 1
@@ -596,25 +801,25 @@ NIL
 HORIZONTAL
 
 SLIDER
-625
-113
-900
-146
+681
+209
+956
+242
 duracao-chuva
 duracao-chuva
 0
 30
-5.0
+15.0
 5
 1
 NIL
 HORIZONTAL
 
 SWITCH
-662
-229
-861
-262
+718
+325
+917
+358
 interferencia-humana
 interferencia-humana
 0
@@ -622,25 +827,25 @@ interferencia-humana
 -1000
 
 SLIDER
-268
-172
-488
-205
+363
+258
+583
+291
 num-plantas-monitoradas
 num-plantas-monitoradas
 1
 10
-5.0
+7.0
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-256
-229
-505
-262
+351
+315
+600
+348
 num-plantas-nao-monitoradas
 num-plantas-nao-monitoradas
 1
